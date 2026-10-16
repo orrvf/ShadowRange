@@ -1,0 +1,7 @@
+
+id: MEMORY_WX
+name: Writable and Executable Memory
+description: Detects memory regions with write and execute permissions.
+severity: medium
+condition:
+  permissions_all: "wx"
