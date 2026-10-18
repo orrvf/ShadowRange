@@ -77,7 +77,14 @@ def main():
                         invalid += 1
                         continue
 
+                    # Process metadata is not a memory region.
+                    # Records without "type" remain supported.
+                    if region.get("type", "memory_region") != "memory_region":
+                        continue
+
                     total += 1
+
+
 
                     if matches_rule(region, rule):
                         alert = {
@@ -89,9 +96,11 @@ def main():
                             "end": region.get("end"),
                             "path": region.get("path"),
                         }
-
                         output.write(json.dumps(alert) + "\n")
                         alerts += 1
+
+
+
 
     except OSError as error:
         print(f"File error: {error}")
