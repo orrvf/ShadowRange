@@ -75,7 +75,7 @@ def investigate(telemetry_path, alerts_path):
     else:
         print("\nNo alerts matched the current detection rule.")
 
-    print("\nNote: No alerts does not prove a process is safe.")
+    print("\nNote: Rule matches are not proof of malicious activity; no matches do not prove safety.")
 
 
 def main():
