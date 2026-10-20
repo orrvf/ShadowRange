@@ -1,146 +1,141 @@
-# \# ShadowRange
+# ShadowRange
 
-# 
+**ShadowRange** is a lightweight Linux process investigation and detection project written in C and Python. It collects process metadata and memory mappings from `/proc`, evaluates a YAML-configured detection rule, and produces alerts and a structured investigation report.
 
-# \*\*ShadowRange\*\* is a Linux-based cybersecurity lab focused on host monitoring, detection engineering, and basic security investigations.
+**Workflow:** Observe → Collect → Analyze → Detect → Investigate → Report
 
-# 
+## What it does
 
-# The project aims to explore how system activity can be collected, analyzed, and used to identify potentially suspicious behavior.
+- Selects a Linux process by PID and collects its metadata and memory mappings.
+- Writes structured JSON Lines (JSONL) telemetry.
+- Evaluates the `MEMORY_WX` rule for memory regions with both write and execute permissions.
+- Writes matching findings to `alerts.jsonl`.
+- Displays an investigation summary and exports a JSON report.
+- Includes four automated tests for basic memory-permission detection behavior.
 
-# 
+## Architecture
 
-# ShadowRange is being developed as a practical learning project, with an emphasis on understanding Linux systems, investigating security events, and building simple, reliable security tools.
+| Component | Location | Purpose |
+| --- | --- | --- |
+| C process monitor | `proc_monitor/src/proc_monitor.c` | Reads Linux `/proc` information for a selected PID |
+| Rule configuration | `detection_engine/rules/memory_wx.yaml` | Defines the memory permission detection condition |
+| Python detection engine | `detection_engine/detect.py` | Processes telemetry and generates alerts |
+| Investigation CLI | `investigation/investigate.py` | Displays process context and findings |
+| Report generator | `investigation/report.py` | Exports findings and limitations to JSON |
+| Unit tests | `tests/test_detection.py` | Checks four permission combinations |
 
-# 
+## Requirements
 
-# \## Project Objectives
+- Linux with `/proc` (also tested under Ubuntu on WSL)
+- GCC
+- Python 3
+- PyYAML
 
-# 
+On Ubuntu:
 
-# \- Collect relevant information about Linux processes and memory activity.
+```bash
+sudo apt update
+sudo apt install gcc python3 python3-yaml
+```
 
-# \- Analyze system telemetry to identify potentially suspicious behavior.
+## Build and run
 
-# \- Develop and test detection rules using controlled scenarios.
+Run all commands from the repository root.
 
-# \- Generate alerts that can support further investigation.
+**1. Build the monitor**
 
-# \- Document findings, limitations, and lessons learned.
+```bash
+gcc -Wall -Wextra -o proc_monitor/proc_monitor proc_monitor/src/proc_monitor.c
+```
 
-# 
+**2. Collect telemetry for the current shell**
 
-# \## Current Capabilities
+```bash
+./proc_monitor/proc_monitor $$
+```
 
-# 
+You can replace `$$` with a PID you have permission to inspect. This creates `shadowrange.telemetry`.
 
-# The initial prototype includes:
+**3. Run detection**
 
-# 
+```bash
+python3 detection_engine/detect.py
+```
 
-# \- A C-based process monitor that collects memory mapping information from Linux.
+This reads `shadowrange.telemetry` and writes `alerts.jsonl`.
 
-# \- Structured telemetry output using JSON Lines (JSONL).
+**4. Investigate**
 
-# \- A Python detection engine that analyzes collected telemetry.
+```bash
+python3 investigation/investigate.py
+```
 
-# \- YAML-based detection rule configuration.
+**5. Generate a report**
 
-# \- An initial detection rule for writable and executable memory regions.
+```bash
+python3 investigation/report.py
+```
 
-# \- Automated tests for basic detection behavior.
+This creates `report.json` containing process metadata, alert counts, evidence, conclusions, and limitations.
 
-# 
+### Using custom input files
 
-# The current monitor collects memory information from its own process. Support for monitoring additional processes is planned.
+```bash
+python3 detection_engine/detect.py /path/to/telemetry.jsonl
+python3 investigation/investigate.py --telemetry /path/to/telemetry.jsonl --alerts alerts.jsonl
+python3 investigation/report.py --telemetry /path/to/telemetry.jsonl --alerts alerts.jsonl --output /path/to/report.json
+```
 
-# 
+**Keep telemetry and alerts from the same detection run.** The investigation and reporting tools validate matching PIDs, but do not currently associate files with a unique run ID.
 
-# \## Technologies
+## Detection example
 
-# 
+The `MEMORY_WX` rule matches a memory region when its permissions include both `w` and `x`:
 
-# \- \*\*Linux\*\* — System information and process monitoring.
+| Permissions | Match? |
+| --- | --- |
+| `r--p` | No |
+| `r-xp` | No |
+| `rw-p` | No |
+| `rwxp` | Yes |
 
-# \- \*\*C\*\* — Low-level telemetry collection.
+An example alert (from synthetic test data):
 
-# \- \*\*Python\*\* — Telemetry analysis and detection logic.
+```json
+{"rule":"MEMORY_WX","severity":"medium","pid":9999,"permissions":"rwxp","start":"3000","end":"4000","path":"/tmp/suspicious"}
+```
 
-# \- \*\*YAML\*\* — Detection rule configuration.
+A match is an **investigation indicator**, not proof of malicious behavior. Legitimate applications can also use writable and executable memory.
 
-# \- \*\*JSONL\*\* — Structured telemetry and alert storage.
+## Tests
 
-# \- \*\*Git \& GitHub\*\* — Version control and project documentation.
+```bash
+python3 -m unittest discover -s tests -v
+```
 
-# 
+The current unit tests cover read-only, executable-only, writable-only, and writable-and-executable regions. Manual end-to-end checks have also been performed against a normal Bash process and synthetic suspicious telemetry, including malformed JSON input to the detection engine.
 
-# \## Development Roadmap
+## Generated files
 
-# 
+| File | Contents |
+| --- | --- |
+| `shadowrange.telemetry` | Process metadata and memory regions in JSONL |
+| `alerts.jsonl` | Detection matches in JSONL |
+| `report.json` | Structured investigation report |
 
-# \### Phase 1 — Host Telemetry
+These files, along with the compiled monitor binary, are excluded from Git.
 
-# 
+## Limitations
 
-# Build a basic Linux process monitor and collect structured information about memory regions.
+- This is a single-process, point-in-time snapshot, not continuous monitoring.
+- Detection currently uses one rule for writable and executable memory.
+- Findings do not prove malicious intent, and no findings do not prove safety.
+- Access to process information depends on Linux permissions and `/proc` visibility.
+- The report timestamp records report generation time, not telemetry collection time.
+- Test coverage is currently limited; this is not production endpoint protection software.
 
-# 
+## Status and scope
 
-# \*\*Status:\*\* Initial implementation completed.
+**MVP v0.1:** The six-stage workflow is implemented and has passed basic manual end-to-end checks. Planned improvements include broader tests, controlled scenarios, and improved command-line ergonomics.
 
-# 
-
-# \### Phase 2 — Detection Engineering
-
-# 
-
-# Develop detection rules, analyze telemetry, and validate detection behavior using controlled test cases.
-
-# 
-
-# \*\*Status:\*\* Initial implementation completed; further development planned.
-
-# 
-
-# \### Phase 3 — Investigation
-
-# 
-
-# Expand process monitoring capabilities and introduce basic tools for inspecting and investigating detection results.
-
-# 
-
-# \*\*Status:\*\* Planned.
-
-# 
-
-# \### Phase 4 — Testing and Reporting
-
-# 
-
-# Improve test coverage, evaluate detection limitations, and document investigation findings.
-
-# 
-
-# \*\*Status:\*\* Planned.
-
-# 
-
-# \## Project Status
-
-# 
-
-# \*\*Early working prototype — under active development.\*\*
-
-# 
-
-# ShadowRange currently demonstrates basic telemetry collection and rule-based detection. The project will be expanded gradually, with a focus on practical cybersecurity skills rather than building a full endpoint security product.
-
-# 
-
-# \## Disclaimer
-
-# 
-
-# ShadowRange is intended for educational purposes and authorized security research. It is not a production-ready security monitoring or endpoint protection solution.
-
+ShadowRange is intended for education and authorized security research. Only inspect systems and processes you are authorized to access.
