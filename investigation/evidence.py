@@ -64,3 +64,40 @@ def load_evidence(telemetry_path, alerts_path):
     if any(type(alert.get("rule")) is not str for alert in alerts):
         raise ValueError("Alert record has an invalid rule")
     return process, regions, alerts, manifest
+
+
+def telemetry_platform(telemetry_path):
+    """Select the investigation path from one explicitly identified process."""
+    records = read_records(telemetry_path)
+    processes = [record for record in records if record.get("type") == "process"]
+    if len(processes) != 1:
+        raise ValueError("Expected exactly one process record in telemetry")
+    platform = processes[0].get("platform", "linux")
+    if platform not in ("linux", "windows"):
+        raise ValueError(f"Unsupported telemetry platform: {platform!r}")
+    return platform
+
+
+def load_windows_snapshot(telemetry_path):
+    """Validate a Windows collector snapshot. This is not a detection result."""
+    records = read_records(telemetry_path)
+    processes = [record for record in records if record.get("type") == "process"]
+    if len(processes) != 1:
+        raise ValueError("Expected exactly one Windows process record")
+    process = processes[0]
+    pid = process.get("pid")
+    if process.get("platform") != "windows" or type(pid) is not int or pid <= 0:
+        raise ValueError("Invalid Windows process record or PID")
+    if not isinstance(process.get("name"), str) or not process["name"]:
+        raise ValueError("Windows process name is missing")
+    if any(record.get("type") not in ("process", "module") for record in records):
+        raise ValueError("Unexpected record type in Windows snapshot")
+    modules = [record for record in records if record.get("type") == "module"]
+    for index, module in enumerate(modules, 1):
+        if module.get("platform") != "windows" or type(module.get("pid")) is not int or module["pid"] != pid:
+            raise ValueError(f"Module {index} does not belong to Windows PID {pid}")
+        if not isinstance(module.get("name"), str) or not module["name"]:
+            raise ValueError(f"Module {index} has no valid name")
+        if not isinstance(module.get("path"), str):
+            raise ValueError(f"Module {index} has no valid path")
+    return process, modules, _sha256(telemetry_path)

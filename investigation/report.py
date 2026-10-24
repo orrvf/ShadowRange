@@ -7,10 +7,46 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from evidence import load_evidence
+from evidence import load_evidence, load_windows_snapshot, telemetry_platform
+from windows_detection import find_unusual_modules
 
 
 def create_report(telemetry_path, alerts_path):
+    if telemetry_platform(telemetry_path) == "windows":
+        process, modules, snapshot_hash = load_windows_snapshot(telemetry_path)
+        findings = find_unusual_modules(process, modules)
+        return {
+            "project": "ShadowRange",
+            "platform": "windows",
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "evidence": {"snapshot_sha256": snapshot_hash},
+            "process": {
+                "pid": process["pid"],
+                "name": process["name"],
+                "ppid": process.get("ppid"),
+                "exe": process.get("exe"),
+                "cmdline": process.get("cmdline"),
+                "start_time_utc": process.get("start_time_utc"),
+                "collected_at_utc": process.get("collected_at_utc"),
+            },
+            "summary": {
+                "modules_collected": len(modules),
+                "windows_detection_status": "evaluated",
+                "windows_findings": len(findings),
+            },
+            "modules": modules,
+            "alerts": findings,
+            "conclusion": (
+                "Unusual Windows module paths found; review the listed modules."
+                if findings else "No unusual module paths matched; this does not prove the process is safe."
+            ),
+            "limitations": [
+                "Only an unusual module path indicator was evaluated; no match does not prove safety.",
+                "AppData and Temp module paths can be legitimate; findings require manual review.",
+                "Module access may be incomplete or unavailable; the collector does not record completeness in telemetry.",
+                "The snapshot SHA256 is calculated at report time, not verified against an independent trusted baseline.",
+            ],
+        }
     process, regions, alerts, manifest = load_evidence(telemetry_path, alerts_path)
     wx_count = sum(
         isinstance(region.get("permissions"), str)
@@ -80,8 +116,12 @@ def main():
         parser.exit(1, f"Report error: {error}\n")
     print("ShadowRange Report")
     print(f"PID: {report['process']['pid']}")
-    print(f"Memory regions: {report['summary']['memory_regions']}")
-    print(f"Alerts: {report['summary']['detection_alerts']}")
+    if report.get("platform") == "windows":
+        print(f"Modules: {report['summary']['modules_collected']}")
+        print(f"Windows suspicious-path findings: {report['summary']['windows_findings']}")
+    else:
+        print(f"Memory regions: {report['summary']['memory_regions']}")
+        print(f"Alerts: {report['summary']['detection_alerts']}")
     print(f"Output: {args.output}")
 
 

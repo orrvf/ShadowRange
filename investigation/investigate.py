@@ -2,10 +2,36 @@
 
 import argparse
 from pathlib import Path
-from evidence import load_evidence, read_records
+from evidence import load_evidence, load_windows_snapshot, telemetry_platform
+from windows_detection import find_unusual_modules
 
 
 def investigate(telemetry_path, alerts_path):
+    if telemetry_platform(telemetry_path) == "windows":
+        process, modules, snapshot_hash = load_windows_snapshot(telemetry_path)
+        print("ShadowRange Investigation — Windows")
+        print("=" * 32)
+        print(f"PID:        {process['pid']}")
+        print(f"Name:       {process['name']}")
+        print(f"Parent PID: {process.get('ppid', 'unknown')}")
+        print(f"Command:    {process.get('cmdline', 'unknown')}")
+        print(f"Executable: {process.get('exe', 'unknown')}")
+        print(f"Started UTC:   {process.get('start_time_utc', 'unknown')}")
+        print(f"Collected UTC: {process.get('collected_at_utc', 'unknown')}")
+        print(f"Modules collected: {len(modules)}")
+        print(f"Snapshot SHA256: {snapshot_hash}")
+        findings = find_unusual_modules(process, modules)
+        print(f"Windows suspicious-path findings: {len(findings)}")
+        for finding in findings[:10]:
+            print(f"  {finding['module']}: {finding['path']} ({finding['reason']})")
+        if len(findings) > 10:
+            print(f"  ... {len(findings) - 10} additional findings in report")
+        print("First 10 modules:")
+        for module in modules[:10]:
+            print(f"  {module['name']}: {module['path']}")
+        print("Note: Unusual paths are investigation leads, not proof of malware.")
+        print("Snapshot SHA256 is a local fingerprint, not proof of authenticity.")
+        return
     process, regions, alerts, manifest = load_evidence(telemetry_path, alerts_path)
     pid = process["pid"]
     wx_regions = sum(
