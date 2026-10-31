@@ -16,3 +16,6 @@ __pycache__/
 
 # Local tests (not submitted)
 /tests/
+
+case-report.json
+pe-report.json
