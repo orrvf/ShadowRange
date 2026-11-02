@@ -1,4 +1,4 @@
-# Generated data
+# Generated telemetry and reports
 shadowrange.telemetry
 windows.telemetry
 test.telemetry
@@ -6,16 +6,19 @@ alerts.jsonl
 alerts.meta.json
 report.json
 windows-report.json
+pe-report.json
+case-report.json
 
-# Compiled binaries
-proc_monitor/proc_monitor
+# Remote investigation runtime data and secrets
+/controller/data/
+/.shadowrange-lab-tokens
 
 # Python cache
 __pycache__/
 *.pyc
 
-# Local tests (not submitted)
-/tests/
+# Compiled binaries
+proc_monitor/proc_monitor
 
-case-report.json
-pe-report.json
+# Local tests
+/tests/
