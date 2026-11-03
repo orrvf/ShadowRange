@@ -22,3 +22,10 @@ proc_monitor/proc_monitor
 
 # Local tests
 /tests/
+
+# LAN runtime and secrets
+/.venv/
+/controller/agents.json
+/controller/admin.env
+/controller/credentials/
+/controller/data/
